@@ -1,0 +1,12 @@
+[Unit]
+Description=Audio-reactive RGB lighting for the Acer OMW950 mouse
+After=pipewire-pulse.service graphical-session.target
+
+[Service]
+# Adjust both paths: the rgb-sens command and your OpenRGB AppImage.
+ExecStart=%h/.local/share/rgb-sens/.venv/bin/rgb-sens run --openrgb %h/Applications/OpenRGB/OpenRGB.AppImage
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rgb-sens"
+version = "0.1.0"
+description = "Audio-reactive RGB lighting for the Acer OMW950 mouse on Linux, built on OpenRGB"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Kim" }]
+keywords = ["openrgb", "rgb", "mouse", "audio-reactive", "linux", "acer", "omw950"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+]
+dependencies = [
+    "numpy>=1.24",
+    "openrgb-python>=0.3.8",
+]
+
+[project.optional-dependencies]
+evdev = ["evdev>=1.6"]
+dev = ["pytest>=7", "ruff>=0.5"]
+
+[project.scripts]
+rgb-sens = "rgb_sens.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
