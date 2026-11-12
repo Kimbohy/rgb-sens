@@ -20,7 +20,10 @@ def make_mode(mode_id: int, name: str, flags: ModeFlags, color_mode: ModeColors,
 
 
 class FakeRawDevice:
-    """Looks like an ``openrgb`` Device: a Direct mode, a Loop mode, an Off mode."""
+    """Looks like an ``openrgb`` Device: Direct, Loop, Ripple, Off.
+
+    Like the real mouse, Ripple has no colour setting. ``loop_has_colour`` says whether Loop has.
+    """
 
     name = "Instant USB Gaming Mouse"
     leds = [object()]
@@ -42,8 +45,12 @@ class FakeRawDevice:
                 1, "Loop", ModeFlags.HAS_SPEED, ModeColors.RANDOM,
                 speed_min=0, speed_max=5, speed=2,
             )  # fmt: skip
-        off = make_mode(2, "Off", ModeFlags(0), ModeColors.NONE)
-        self.modes = [direct, loop, off]
+        ripple = make_mode(
+            2, "Ripple", ModeFlags.HAS_SPEED | ModeFlags.HAS_BRIGHTNESS, ModeColors.RANDOM,
+            speed_min=0, speed_max=5, brightness_min=0, brightness_max=7, speed=2, brightness=3,
+        )  # fmt: skip
+        off = make_mode(3, "Off", ModeFlags(0), ModeColors.NONE)
+        self.modes = [direct, loop, ripple, off]
 
     def set_mode(self, mode: ModeData) -> None:
         colors = [(c.red, c.green, c.blue) for c in (mode.colors or [])]
@@ -78,11 +85,21 @@ class ScriptedAudio:
         self.features = Features()
 
     def silent(self) -> None:
+        """Total silence."""
         self.features = Features()
 
-    def loud_bass(self) -> None:
+    def hiss(self, db: float = -58.0) -> None:
+        """A faint noise: not a total silence, but far under the quiet threshold."""
         self.features = Features(
-            bands=np.array([0.9, 0.9, 0.1, 0.1, 0.0, 0.0]), level=0.8, kick=0.8, snare=0.0, hat=0.0
+            bands=np.array([0.3, 0.2, 0.1, 0.1, 0.1, 0.1]), level=0.25, loudness_db=db
+        )
+
+    def loud_bass(self, db: float = -20.0) -> None:
+        self.features = Features(
+            bands=np.array([0.9, 0.9, 0.1, 0.1, 0.0, 0.0]),
+            level=0.8,
+            kick=0.8,
+            loudness_db=db,
         )
 
     def snapshot(self) -> Features:
@@ -92,7 +109,7 @@ class ScriptedAudio:
 def features(bands, level=0.8, kick=0.0, snare=0.0, hat=0.0) -> Features:
     arr = np.zeros(NUM_BANDS)
     arr[: len(bands)] = bands
-    return Features(arr, level, kick, snare, hat)
+    return Features(arr, level, kick, snare, hat, loudness_db=-20.0)
 
 
 def sine(freq: float, seconds: float, amplitude: float = 0.5, start: int = 0) -> np.ndarray:

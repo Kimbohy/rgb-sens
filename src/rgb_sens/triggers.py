@@ -1,7 +1,7 @@
 """Ways to change mode: the mouse's LED button, a signal, or the keyboard.
 
 The LED button of the Acer OMW950 is handled by the mouse firmware, but it also reports
-itself to the PC: each press sends two short HID reports starting with ``06 f6`` on the
+itself to the PC: each press sends HID reports starting with ``06 f6`` on the
 mouse's LED interface (``/dev/hidraw*``). Reading them needs no special group on most
 systems, because OpenRGB's udev rules already give your user access to that device.
 """

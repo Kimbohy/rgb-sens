@@ -86,6 +86,7 @@ def idle_white(t: float, level: float = 0.0) -> float:
 class Effect(ABC):
     name: str
     label: str
+    reactive: bool = True  # False for effects that ignore the sound (never go idle)
 
     def __init__(self, config: EffectConfig | None = None):
         self.config = config or EffectConfig()
@@ -109,6 +110,7 @@ class Breath(Effect):
 
     name = "breath"
     label = "breath: soft white breathing (software)"
+    reactive = False
 
     def render(self, t: float, dt: float, f: Features) -> RGB:
         v = 0.05 + 0.95 * (0.5 - 0.5 * math.cos(2 * math.pi * t / 6.0))

@@ -61,7 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"modes in cycling order, from: {', '.join([HARDWARE, *EFFECTS])}",
     )
     run.add_argument("--start", type=int, default=1, help="number of the first mode (default 1)")
-    run.add_argument("--hw-mode", default="Loop", help="firmware effect for the 'hw' mode")
+    run.add_argument(
+        "--hw-mode",
+        default="Ripple",
+        help="firmware effect for the 'hw' mode, and the one used when it goes quiet (see hw-demo)",
+    )
     run.add_argument(
         "--hw-speed", type=float, default=0.0, help="firmware effect speed, 0 (slow) to 1 (fast)"
     )
@@ -74,8 +78,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--silence-db",
         type=float,
         default=DEFAULT_SILENCE_DB,
-        help="level under which the sound counts as silence (raise it if the mouse never "
-        "returns to white; see the 'meter' command)",
+        help="loudness in dB under which nothing counts as playing: not only a total silence, "
+        "a faint hiss or a very quiet sound counts too (read your own level with 'meter')",
+    )
+    run.add_argument(
+        "--idle-delay",
+        type=float,
+        default=4.0,
+        help="seconds of quiet before going back to the firmware effect (default 4)",
+    )
+    run.add_argument(
+        "--no-idle",
+        action="store_true",
+        help="when quiet, fade to a soft white instead of switching to the firmware effect",
     )
     run.add_argument("--brightness", type=float, default=1.0, help="global brightness, 0 to 1")
     run.add_argument("--no-dither", action="store_true", help="disable temporal dithering")
@@ -110,6 +125,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     demo.add_argument("--seconds", type=float, default=8.0, help="time per effect")
     demo.add_argument("--hw-speed", type=float, default=0.0, help="0 (slow) to 1 (fast)")
+    demo.add_argument("--only", metavar="NAME", help="play only this effect, e.g. --only Ripple")
 
     meter = sub.add_parser("meter", parents=[connection], help="live audio meter (no mouse needed)")
     meter.add_argument("--sens", type=float, default=1.0)
@@ -143,12 +159,12 @@ def cmd_probe(args: argparse.Namespace) -> int:
 def cmd_hw_demo(args: argparse.Namespace) -> int:
     with _session(args) as session:
         mouse = session.mouse()
-        modes = mouse.hardware_modes()
-        print("Watch the mouse. Note any effect where the light travels around it.\n")
+        modes = [mouse.find_mode(args.only)] if args.only else mouse.hardware_modes()
+        print("Watch the mouse: is the light white? does it travel around the mouse?\n")
         try:
             for i, mode in enumerate(modes, 1):
                 white = mouse.apply_hardware(mode.name, args.hw_speed)
-                tag = "white" if white else "fixed colours"
+                tag = "white" if white else "no colour setting: white requested, check the mouse"
                 print(f"  [{i}/{len(modes)}] {mode.name}  ({tag})")
                 time.sleep(args.seconds)
         except KeyboardInterrupt:
@@ -167,14 +183,17 @@ def cmd_meter(args: argparse.Namespace) -> int:
     except AudioError as exc:
         print(exc, file=sys.stderr)
         return 2
-    print("Play some sound. Ctrl+C to quit.   bands: " + " ".join(BAND_NAMES))
+    print(f"Bands: {' '.join(BAND_NAMES)}")
+    print(f"Quiet threshold: {args.silence_db:g} dB (--silence-db). Ctrl+C to quit.")
+    print("Play something, then stop it: the figure must fall under the threshold.\n")
     try:
         while True:
             f = analyzer.snapshot()
             bars = "".join(_BARS[min(8, int(v * 8.99))] * 3 + " " for v in f.bands)
-            state = "SILENCE" if f.level == 0.0 else f"level {f.level:4.2f}"
+            state = "QUIET" if f.loudness_db < args.silence_db else "sound"
             print(
-                f"\r{bars} | {state} | kick {f.kick:4.2f} snare {f.snare:4.2f} hat {f.hat:4.2f}  ",
+                f"\r{bars} | {f.loudness_db:6.1f} dB {state:<5} | kick {f.kick:4.2f} "
+                f"snare {f.snare:4.2f} hat {f.hat:4.2f}  ",
                 end="",
                 flush=True,
             )
@@ -204,6 +223,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         brightness=args.brightness,
         dither=not args.no_dither,
         fps=args.fps,
+        silence_db=args.silence_db,
+        idle_to_hw=not args.no_idle,
+        idle_delay=max(args.idle_delay, 0.5),
     )
     capture = None
     analyzer = None

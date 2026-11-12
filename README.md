@@ -4,7 +4,8 @@ Audio-reactive RGB lighting for the **Acer OMW950** gaming mouse on Linux, built
 [OpenRGB](https://openrgb.org/).
 
 The mouse listens to what your PC plays: the bass pushes red into a soft white, the pitch of the
-music can colour the whole mouse, and when the sound stops the light fades back to white.
+music can colour the whole mouse, and when the sound stops the mouse goes back to a white
+firmware effect (Ripple by default).
 Press the mouse's own LED button to switch between modes. One command, nothing to click.
 
 [Français](README.fr.md)
@@ -13,13 +14,20 @@ Press the mouse's own LED button to switch between modes. One command, nothing t
 
 | # | Mode | What it does |
 |---|------|--------------|
-| 1 | `hw` | The mouse's own firmware effect (default: `Loop`), set to slow white. Costs no CPU. |
+| 1 | `hw` | The mouse's own firmware effect (default: `Ripple`), requested in white. Costs no CPU. |
 | 2 | `pulse` | Soft white. Red rises on every kick and lingers, highs add a light sparkle. |
 | 3 | `hue` | The colour follows the pitch: bass is red, then orange, green, blue, treble is violet. Brightness follows the volume. |
 | 4 | `mixer` | Bass is red, mids are green, highs are blue, and kicks add a short white flash. |
 
-In modes 2 to 4, when the sound stops the colour is held for a moment (`--hold`, 1 s by default),
-then fades slowly back to white.
+In modes 2 to 4, when the sound stops the colour is held for a moment (`--hold`, 1 s by default)
+and fades slowly. If the sound stays under the quiet threshold (`--silence-db`, -50 dB) for
+`--idle-delay` seconds (4 by default), the mouse goes back to the firmware effect of mode 1
+(Ripple in white). When the sound comes back, the mode you were in takes over again.
+
+The threshold is a **loudness level, not a total silence**: a faint hiss or a very quiet sound
+counts as quiet. Use `rgb-sens meter` to read the level of your own sound card and adjust
+`--silence-db`. Add `--no-idle` to fade to a soft white instead of switching to the firmware
+effect.
 
 ## Requirements
 
@@ -78,12 +86,14 @@ just type `rgb-sens`.
 | Option | Default | Effect |
 |--------|---------|--------|
 | `--modes` | `hw,pulse,hue,mixer` | Which modes, in which order. `--modes hue` keeps only one. |
-| `--hold` | `1.0` | Seconds before the colour fades back to white once the sound stops. |
+| `--hold` | `1.0` | Seconds the colour is held once the sound stops, before it fades. |
 | `--smooth` | `1.0` | Softness of every transition: `1.5` softer, `0.7` snappier. |
 | `--sens` | `1.0` | Audio sensitivity. The volume of the PC does not matter, this is the contrast. |
-| `--silence-db` | `-66` | Level under which the sound counts as silence. |
+| `--silence-db` | `-50` | Loudness in dB under which nothing counts as playing (faint noise included). |
+| `--idle-delay` | `4.0` | Seconds of quiet before going back to the firmware effect. |
+| `--no-idle` | off | Fade to a soft white instead of switching to the firmware effect. |
 | `--brightness` | `1.0` | Global brightness. |
-| `--hw-mode` | `Loop` | Firmware effect used by the `hw` mode. |
+| `--hw-mode` | `Ripple` | Firmware effect used by the `hw` mode and when it is quiet. |
 | `--hw-speed` | `0.0` | Firmware effect speed, from 0 (slowest) to 1. |
 | `--no-dither` | off | Disable temporal dithering (see below) if you see flicker. |
 | `--source` | default monitor | Audio source, see `pactl list short sources`. |
@@ -92,14 +102,19 @@ just type `rgb-sens`.
 
 - OpenRGB sees the OMW950 as **one LED**: in software, the whole mouse always has the same colour.
   A light that travels around the mouse is therefore **not possible** from this program. Only the
-  firmware effects can animate across the mouse, and with white as the colour the `Loop` effect
-  shows a slow pulse. Run `rgb-sens hw-demo` to see every firmware effect in white, and pick
-  the one you like with `--hw-mode`.
+  firmware effects can animate across the mouse. Run `rgb-sens hw-demo` to see every firmware
+  effect, and pick the one you like with `--hw-mode`.
+- Most firmware effects, Ripple included, have **no colour setting** in OpenRGB. rgb-sens still
+  asks for white: it sends white in Direct mode, then starts the effect, hoping the mouse keeps
+  that colour. Whether it does depends on the firmware, so check with
+  `rgb-sens hw-demo --only Ripple`. `Breathing` is the only effect that takes a colour, so it
+  is the one that is guaranteed to be white.
 - The firmware also changes mode by itself when you press its LED button. rgb-sens takes control
   back about a third of a second later, so you may see a very short flash of the firmware mode.
 - The mouse's USB id is `30fa:1040` (`INSTANT USB GAMING MOUSE`). Each press of the LED button
-  sends two short HID reports starting with `06 f8` on the mouse's LED interface; this is what
-  rgb-sens listens to. These two bytes are specific to this mouse.
+  sends HID reports starting with `06 f6` on the mouse's LED interface; this is what rgb-sens
+  listens to. These two bytes are specific to this mouse. (Other reports starting with `06 f8`
+  also appear on that interface: they are not the button.)
 
 ## How it works
 
@@ -137,10 +152,11 @@ A few choices that make it look smooth rather than "twitchy":
 
 ## Troubleshooting
 
-**The mouse never returns to white after the music stops.**
-Run `rgb-sens meter` and stop the sound. It must show `SILENCE`. If it shows a level instead,
-something is still playing quietly (a hiss, a notification sound); raise the threshold, for
-example `rgb-sens --silence-db -50`.
+**The mouse does not go back to the firmware effect when the music stops.**
+Run `rgb-sens meter` and stop the sound. It shows the loudness in dB and `QUIET` once it is
+under the threshold. If it stays at `sound`, something is still playing (a hiss, a notification
+sound): read the figure and set the threshold just above it, for example
+`rgb-sens --silence-db -40`. The program prints a line each time it goes quiet or wakes up.
 
 **No reaction to the sound.**
 Play something and run `rgb-sens meter`. If the bars stay empty, check

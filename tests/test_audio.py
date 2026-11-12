@@ -78,6 +78,26 @@ def test_silence_threshold_is_configurable():
     assert high_gate.snapshot().level == 0.0
 
 
+def test_loudness_is_reported_in_decibels():
+    analyzer = AudioAnalyzer()
+    feed(analyzer, sine(440, 0.5, amplitude=0.5))
+    assert analyzer.snapshot().loudness_db == pytest.approx(-9.0, abs=1.0)
+
+
+def test_silence_has_a_very_low_loudness():
+    analyzer = AudioAnalyzer()
+    feed(analyzer, np.zeros(HOP * 100, dtype=np.float32))
+    assert analyzer.snapshot().loudness_db < -100
+
+
+def test_a_faint_hiss_counts_as_quiet_by_default():
+    analyzer = AudioAnalyzer()
+    feed(analyzer, sine(1000, 1.0, amplitude=0.0018))  # about -58 dB: not a total silence
+    f = analyzer.snapshot()
+    assert -62 < f.loudness_db < -54
+    assert f.level == 0.0 and not f.bands.any()
+
+
 def test_wrong_block_size_is_rejected():
     with pytest.raises(ValueError):
         AudioAnalyzer().process(np.zeros(HOP + 1, dtype=np.float32))

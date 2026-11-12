@@ -15,6 +15,7 @@ from openrgb.utils import DeviceType, ModeFlags, RGBColor
 log = logging.getLogger(__name__)
 
 WHITE = RGBColor(255, 255, 255)
+PRIME_DELAY = 0.08  # seconds between the white we send and the firmware effect starting
 _NON_HARDWARE_MODES = {"direct", "off"}
 
 
@@ -141,9 +142,15 @@ class MouseDevice:
         return ModeFlags.HAS_MODE_SPECIFIC_COLOR in mode.flags and (mode.colors_max or 0) >= 1
 
     def apply_hardware(self, name: str, speed: float = 0.0) -> bool:
-        """Start a firmware effect, as white if it allows a colour. Returns True if it is white.
+        """Start a firmware effect and ask for white. Returns True if white is guaranteed.
 
         ``speed`` goes from 0 (slowest) to 1 (fastest).
+
+        When the effect has a colour setting, we use it and the result is white. When it has
+        none (Ripple, for example), OpenRGB gives us no way to choose its colour. We still try:
+        some mice keep the last colour they received and use it for the effect, so we send
+        white in Direct mode first, then start the effect. Whether the mouse honours that
+        cannot be known from here; the return value is False in this case.
         """
         mode = self.find_mode(name)
         if ModeFlags.HAS_SPEED in mode.flags and mode.speed_min is not None:
@@ -154,6 +161,10 @@ class MouseDevice:
         if white:
             count = min(max(mode.colors_min or 1, 1), mode.colors_max)
             mode.colors = [WHITE] * count
+        elif self._direct is not None:
+            self.set_direct()
+            self._dev.set_color(WHITE)
+            time.sleep(PRIME_DELAY)
         self._dev.set_mode(mode)
         return white
 

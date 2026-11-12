@@ -22,6 +22,18 @@ def test_options_without_a_command_mean_run():
     assert args.command == "run" and args.hold == 2.0
 
 
+def test_hw_demo_can_play_a_single_effect():
+    args = build_parser().parse_args(["hw-demo", "--only", "Ripple"])
+    assert args.only == "Ripple"
+
+
+def test_run_defaults_match_the_documented_behaviour():
+    args = build_parser().parse_args(["run"])
+    assert args.hw_mode == "Ripple"
+    assert args.silence_db == -50.0
+    assert args.idle_delay == 4.0 and args.no_idle is False
+
+
 def test_a_bad_mode_is_reported_before_trying_to_connect(capsys):
     assert main(["--modes", "hw,disco", "--port", "1"]) == 1
     err = capsys.readouterr().err

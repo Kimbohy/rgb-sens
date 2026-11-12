@@ -37,7 +37,9 @@ NUM_BANDS = len(BAND_NAMES)
 # Music has less energy in the highs than in the lows; this compensates for it.
 _TILT_DB = np.array([0.0, 2.0, 5.0, 8.0, 11.0, 14.0])
 
-DEFAULT_SILENCE_DB = -66.0
+# Loudness (RMS, dB relative to full scale) under which nothing is considered to be playing.
+# It is not "total silence": a faint hiss or a very quiet sound counts as quiet too.
+DEFAULT_SILENCE_DB = -50.0
 _CAPTURE_TIMEOUT = 0.15  # no samples for this long -> treat as silence
 _MAX_BACKLOG_BLOCKS = 48  # ~280 ms; beyond this we drop old audio to stay real time
 _KEEP_BLOCKS = 4
@@ -54,9 +56,12 @@ class Features:
     kick: float = 0.0
     snare: float = 0.0
     hat: float = 0.0
+    loudness_db: float = -120.0  # absolute loudness (not auto-normalised), used to detect quiet
 
     def copy(self) -> Features:
-        return Features(self.bands.copy(), self.level, self.kick, self.snare, self.hat)
+        return Features(
+            self.bands.copy(), self.level, self.kick, self.snare, self.hat, self.loudness_db
+        )
 
 
 class AudioAnalyzer:
@@ -126,10 +131,13 @@ class AudioAnalyzer:
         self._avg += (grouped - self._avg) * (self._dt / 0.30)
 
         with self._lock:
-            self._cur = Features(bands, level, float(hits[0]), float(hits[1]), float(hits[2]))
+            self._cur = Features(
+                bands, level, float(hits[0]), float(hits[1]), float(hits[2]), level_db
+            )
             acc = self._acc
             acc.bands = np.maximum(acc.bands, bands)
             acc.level = max(acc.level, level)
+            acc.loudness_db = max(acc.loudness_db, level_db)
             acc.kick = max(acc.kick, self._cur.kick)
             acc.snare = max(acc.snare, self._cur.snare)
             acc.hat = max(acc.hat, self._cur.hat)
@@ -138,7 +146,9 @@ class AudioAnalyzer:
         """Peak values seen since the previous call (so no kick is missed between two frames)."""
         with self._lock:
             out = self._acc.copy()
-            self._acc = Features(self._cur.bands.copy(), self._cur.level)
+            self._acc = Features(
+                self._cur.bands.copy(), self._cur.level, loudness_db=self._cur.loudness_db
+            )
         return out
 
     def silence(self) -> None:
